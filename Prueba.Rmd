@@ -1,0 +1,665 @@
+---
+title: "Prueba ifood"
+author: "Catalina Herrera"
+date: "February 6, 2021"
+output:
+  html_document:
+    df_print: paged
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Contexto
+
+Los datos suministrados contienen información de atención clínica, de pacientes diabéticos con admisión hospitalaria entre 1 y 14 días y a quienes se les practicaron exámenes de laboratorio y se les administraron medicamentos, en 130 hospitales y redes integradas de prestación de servicios en EE.UU. entre los años 1999 y 2008. 
+
+Se reporta información demográfica como raza, sexo y edad del paciente y de la atención como el tipo de admisión, el tiempo en el hospital, la especialidad del médico que lo admite, el número de pruebas de laboratorio realizadas, el resultado de la prueba HbA1c, el diagnóstico, la cantidad de medicación suminstrada, si le fueron aplicados medicamentos para diabéticos, la cantidad de pacientes ambulatorios, el número de visitas hospitalarias y urgentes en el año anterior a la hospitalización, etc; y el resultado de la atención (no readmisión, readmisión en menos de 30 días, readmisión después de 30 días)
+
+En este análisis se construirá un modelo analítico para clasificar el resultado de la atención siguiendo la metodología CRISP-DM 
+
+### Objetivo de Negocio
+
+Inferir y caracterizar los perfiles de los pacientes y la atención que resultan en una readmisión para mejorar los niveles de servicio reduciendo a futuro el número de readmisiones. 
+
+### Criterios de éxito del Negocio
+
+Identificar tempranamente al menos el 30% de las atenciones con riesgo de readmisión.
+
+### Objetivos de la analítica de datos
+
+Construir un modelo de clasificación para predecir el resultado de una atención con base en el perfil demográfico del paciente y las condiciones de la admisión identificando factores de riesgo y de protección ante una posible readmisión.
+
+### Criterios de éxito de la analítica de datos
+
+Lograr una sensibilidad de por lo menos 30% en las clases "readmisión en menos de 30 días" y "readmisión después de 30 días".
+
+## Entendimiento y preparación de los datos
+
+Se tienen 101.766 registros de 50 variables (13 de tipo numérico y 37 de tipo caracter que serán tomadas como factores) para 71.518 pacientes únicos. Para las variables categóricas se observan algunos problemas de calidad en la variable *weight* para la cual cerca del 97% de los datos son faltantes y por lo tanto se descartará del análisis, al igual que las variables examide	y	citoglipton que solo tienen 1 nivel. Adicionalmente las variables *diag_1*, *diag_2* y *diag_3* tienen al rededor de 700 niveles diferentes lo cual puede generar problemas al construir los modelos de clasificación. Para transformar estas variables se toma la clasificación de los diagnósticos realizada por @strack2014impact que se muestra en la siguiente tabla. 
+
+<style type="text/css">
+.tg  {border-collapse:collapse;border-color:#ccc;border-spacing:0;border-style:solid;border-width:1px;}
+.tg td{background-color:#fff;border-color:#ccc;border-style:solid;border-width:0px;color:#333;
+  font-family:Arial, sans-serif;font-size:14px;overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg th{background-color:#f0f0f0;border-color:#ccc;border-style:solid;border-width:0px;color:#333;
+  font-family:Arial, sans-serif;font-size:14px;font-weight:normal;overflow:hidden;padding:10px 5px;word-break:normal;}
+.tg .tg-0lax{text-align:left;vertical-align:top}
+</style>
+<table class="tg">
+<thead>
+  <tr>
+    <th class="tg-0lax">Group name</th>
+    <th class="tg-0lax">icd9 codes</th>
+    <th class="tg-0lax">Number of encounters</th>
+    <th class="tg-0lax">% of encounter</th>
+    <th class="tg-0lax">Description</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td class="tg-0lax">Circulatory</td>
+    <td class="tg-0lax">390–459, 785</td>
+    <td class="tg-0lax">21,411</td>
+    <td class="tg-0lax">30.60%</td>
+    <td class="tg-0lax">Diseases of the circulatory system</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax">Respiratory</td>
+    <td class="tg-0lax">460–519, 786</td>
+    <td class="tg-0lax">9,490</td>
+    <td class="tg-0lax">13.60%</td>
+    <td class="tg-0lax">Diseases of the respiratory system</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax">Digestive</td>
+    <td class="tg-0lax">520–579, 787</td>
+    <td class="tg-0lax">6,485</td>
+    <td class="tg-0lax">9.30%</td>
+    <td class="tg-0lax">Diseases of the digestive system</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax">Diabetes</td>
+    <td class="tg-0lax">250.xx</td>
+    <td class="tg-0lax">5,747</td>
+    <td class="tg-0lax">8.20%</td>
+    <td class="tg-0lax">Diabetes mellitus</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax">Injury</td>
+    <td class="tg-0lax">800–999</td>
+    <td class="tg-0lax">4,697</td>
+    <td class="tg-0lax">6.70%</td>
+    <td class="tg-0lax">Injury and poisoning</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax">Musculoskeletal</td>
+    <td class="tg-0lax">710–739</td>
+    <td class="tg-0lax">4,076</td>
+    <td class="tg-0lax">5.80%</td>
+    <td class="tg-0lax">Diseases of the musculoskeletal system&nbsp;&nbsp;&nbsp;and connective tissue</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax">Genitourinary</td>
+    <td class="tg-0lax">580–629, 788</td>
+    <td class="tg-0lax">3,435</td>
+    <td class="tg-0lax">4.90%</td>
+    <td class="tg-0lax">Diseases of the genitourinary system</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax">Neoplasms</td>
+    <td class="tg-0lax">140–239</td>
+    <td class="tg-0lax">2,536</td>
+    <td class="tg-0lax">3.60%</td>
+    <td class="tg-0lax">Neoplasms</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax">Other (17.3%)</td>
+    <td class="tg-0lax">780, 781, 784, 790–799</td>
+    <td class="tg-0lax">2,136</td>
+    <td class="tg-0lax">3.10%</td>
+    <td class="tg-0lax">Other symptoms, signs, and ill-defined&nbsp;&nbsp;&nbsp;conditions</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">240–279, without 250</td>
+    <td class="tg-0lax">1,851</td>
+    <td class="tg-0lax">2.60%</td>
+    <td class="tg-0lax">Endocrine, nutritional, and metabolic&nbsp;&nbsp;&nbsp;diseases and immunity disorders, without diabetes</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">680–709, 782</td>
+    <td class="tg-0lax">1,846</td>
+    <td class="tg-0lax">2.60%</td>
+    <td class="tg-0lax">Diseases of the skin and subcutaneous&nbsp;&nbsp;&nbsp;tissue</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">001–139</td>
+    <td class="tg-0lax">1,683</td>
+    <td class="tg-0lax">2.40%</td>
+    <td class="tg-0lax">Infectious and parasitic diseases</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">290–319</td>
+    <td class="tg-0lax">1,544</td>
+    <td class="tg-0lax">2.20%</td>
+    <td class="tg-0lax">Mental disorders</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">E–V</td>
+    <td class="tg-0lax">918</td>
+    <td class="tg-0lax">1.30%</td>
+    <td class="tg-0lax">External causes of injury and&nbsp;&nbsp;&nbsp;supplemental classification</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">280–289</td>
+    <td class="tg-0lax">652</td>
+    <td class="tg-0lax">0.90%</td>
+    <td class="tg-0lax">Diseases of the blood and blood-forming&nbsp;&nbsp;&nbsp;organs</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">320–359</td>
+    <td class="tg-0lax">634</td>
+    <td class="tg-0lax">0.90%</td>
+    <td class="tg-0lax">Diseases of the nervous system</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">630–679</td>
+    <td class="tg-0lax">586</td>
+    <td class="tg-0lax">0.80%</td>
+    <td class="tg-0lax">Complications of pregnancy, childbirth,&nbsp;&nbsp;&nbsp;and the puerperium</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">360–389</td>
+    <td class="tg-0lax">216</td>
+    <td class="tg-0lax">0.30%</td>
+    <td class="tg-0lax">Diseases of the sense organs</td>
+  </tr>
+  <tr>
+    <td class="tg-0lax"></td>
+    <td class="tg-0lax">740–759</td>
+    <td class="tg-0lax">41</td>
+    <td class="tg-0lax">0.10%</td>
+    <td class="tg-0lax">Congenital anomalies</td>
+  </tr>
+</tbody>
+</table>
+
+Los diagnósticos 783 y 789 se asignaron igualmente a la categoría "otros" al no estar clasificados en la tabla.
+
+Entre las variables almacenadas como numéricas están *encounter_id*, *patient_nbr*, *admission_type_id*, *discharge_disposition_id* y *admission_source_id*, las 2 primeras representan los id de la admisión y el paciente que no son de interés para el análisis mientras que las 3 últimas son variables categóricas que representan el tipo de admisión, tipo de alta y de dónde fue remitido el paciente, estas 3 últimas variables se incluirán en el análisis como categóricas. 
+
+Para las demás variables numéricas se analizaron algunas medidas de centralidad y dispersión observando que los mayores problemas de sesgo y curtosis se dan en las variables *number_outpatient*, *number_emergency* y *number_inpatient* que corresponden al número de consultas externas, consultas de urgencia y consultas internas en el año anterior respectivamente. Para estas variables se hace un análisis más detallado de la distribución para determinar si alguna transformación realizada sobre estas logra una mejor distribución, sin embargo transformaciones usuales como logaritmos en diferentes bases o raíces cuadradas no fueron exitosas. Debido a que se observó que para las 3 variables al menos en el 50% de los casos el valor es 0 se decide observar si al dicotomizar la variable (tuvo o no tuvo consultas en el último año) se logra ver una relación con la respuesta observando que efectivamente la mayoría de pacientes no readmitidos no habían tenido consultas previas mientras que para los readmitidos antes o después de 30 días este porcentaje suele ser menor.
+
+Para las variables *num_lab_procedures* y *num_medications* se observa una dispersión más alta que para las variables *num_procedures*, *num_diagnoses* y *time_in_hospital* la cuales se analizaron como variables discretas. Se concluye que los pacientes no readmitidos fueron sometidos a más procedimientos, tuvieron un mayor número de diagnósticos y tuvieron estadías más largas que los pacientes que si fueron readmitidos, sin embargo, se observa que los pacientes no readmitidos suelen recibir menos medicamentos y someterse a menos exámenes de laboratorio.
+
+En cuanto a las variables categóricas la mayoría se observa que sí tienen una relación con la readmisión o no readmisión de los pacientes a excepción de varios medicamentos expecíficos como *glyburide - metformin*, *glipizide - metformin*, *glimepiride - gliometazone*, *metformin - rosiglitazone*, *metformin - pioglitazone*, *citoglipton*, *acetohexamide*, *tolazamide*, *troglitazone*, *migliton*, *acarbose*, *tolbutamide* y *glyburide*. Todas estas variables con una baja relación con la respuesta se descartarán del análisis.
+
+
+```{r Carga de librerías, warning=FALSE, message=FALSE}
+library(dplyr)
+library(readr)
+library(knitr)
+library(psych)
+library(tidyr)
+library(ggplot2)
+library(forcats)
+library(h2o)
+options(digits = 2,scipen=999)
+```
+
+
+```{r Lectura de los datos}
+diabetic_data <- read_csv("dataset_diabetes/diabetic_data.csv", na = "?",
+                            col_types = cols(weight = col_character(),
+                                             payer_code = col_character()))
+head(diabetic_data)
+
+```
+
+
+```{r Dimensionamiento_dataset}
+diabetic_data %>%
+  summarise(Total_registros = n(),
+            Total_columnas = ncol(diabetic_data),
+            Pacientes_unicos = n_distinct(patient_nbr))
+
+```
+```{r Estructura_dataset}
+tipo_datos <- diabetic_data %>% summarise_all(class) %>% t()
+tipo_datos %>% table()
+```
+```{r Calidad_categóricas}
+niveles <- diabetic_data %>%
+  summarise_if(is.character,n_distinct) %>%
+  t()
+
+faltantes <- diabetic_data %>%
+  summarise_if(is.character,function(x){paste0(round(mean(is.na(x)),4)*100,'%')}) %>%
+  t()
+data.frame(niveles = niveles, 
+           faltantes = faltantes)
+```
+
+```{r Transformacion diagnosticos}
+diag_trans <- function(diag){
+  diag_ind  = grepl("E",diag)|grepl("V",diag)
+  diag[diag_ind] <- -1
+  diag <- as.numeric(diag)
+  diag = case_when(
+    diag == -1~"external",
+    between(diag,250,250.99) ~ "diabetes",
+    between(diag,390,459)|diag == 785 ~ "circulatory",
+    between(diag,460,519)|diag == 786 ~ "respiratory",
+    between(diag,520,579)|diag == 787 ~ "digestive",
+    between(diag,800,999) ~ "injury",
+    between(diag,710,739) ~ "muscoskeletal",
+    between(diag,580,629)|diag == 788 ~ "genitourinary",
+    between(diag,140,239) ~ "neoplasms",
+    between(diag,790,799)|diag %in% c(780, 781, 784, 783,789) ~ "other",
+    between(diag,240,279) ~ "endocrine",
+    between(diag,680,709)|diag == 782 ~ "dermatologic",
+    between(diag,1,139) ~ "infection",
+    between(diag,290,319) ~ "mental",
+    between(diag,280,289)~"hematological",
+    between(diag,320,359)~"neural",
+    between(diag,630,679)~"obstetrical",
+    between(diag,360,389)~"senses",
+    between(diag,740,759)~"congenital")
+  return(diag)}
+
+diabetic_data2 <- diabetic_data %>%
+  mutate_at(vars(contains("diag_")),
+            diag_trans)
+
+```
+
+```{r Categóricas - Numéricas}
+cat_num <- diabetic_data2 %>%
+  select_if(is.numeric) %>%
+  select_at(vars(contains("id"),patient_nbr)) 
+
+niveles2 <- cat_num %>% 
+  summarise_all(n_distinct) %>%
+  t()
+
+faltantes2 <- cat_num %>%  
+  summarise_all(function(x){paste0(round(mean(is.na(x)),4)*100,'%')}) %>%
+  t()
+data.frame(niveles = niveles2, 
+           faltantes = faltantes2)
+
+```
+
+
+
+```{r Resumen numéricas}
+diabetic_data3 <- diabetic_data2 %>%
+  mutate_at(vars(contains('_id'),patient_nbr),as.factor) %>%
+  mutate_if(is.character,as.factor)
+
+diabetic_data3 %>%
+  select_if(is.numeric) %>%
+  describe()
+```
+```{r Distribucion consultas}
+diabetic_data3 %>%
+  group_by(readmitted) %>%
+  select(number_outpatient,number_emergency,number_inpatient) %>%
+  gather("variable", "identidad", -readmitted) %>%
+  mutate(log_2 = log2(1+identidad),
+         raiz = sqrt(identidad),
+         log_n = log1p(identidad),
+         log_10 = log10(identidad+1))%>%
+  gather("transformacion","valor",-variable, -readmitted) %>%
+  ggplot(aes(y = valor, x = readmitted,fill = readmitted))+
+  geom_boxplot() + 
+  facet_grid(transformacion~variable, scales = "free")
+  
+```
+
+```{r Consultas vs readmision }
+diabetic_data3 %>%
+  group_by(readmitted) %>%
+  select(number_outpatient,number_emergency,number_inpatient) %>%
+  summarise_all(function(x){mean(x == 0)})
+```
+
+```{r Categorizacion consultas}
+diabetic_data4 <- diabetic_data3 %>%
+  mutate_at(vars(number_outpatient,number_emergency,number_inpatient), function(x){factor(x == 0)})
+```
+
+```{r Readmision vs numericas}
+diabetic_data4 %>%
+  group_by(readmitted) %>%
+  select_if(is.numeric) %>%
+  gather("variable", "valor", -readmitted) %>%
+  ggplot(aes(x = valor,fill = readmitted))+
+  geom_histogram() + 
+  facet_wrap(.~variable, scales = "free")
+```
+
+
+
+```{r Readmision vs discretas}
+diabetic_data4 %>%
+  group_by(readmitted) %>%
+  select_if(is.numeric) %>%
+  select(-num_lab_procedures,-num_medications)%>%
+  gather("variable", "valor", -readmitted) %>%
+  ggplot(aes(x = valor, y = ..prop..,fill = readmitted))+
+  geom_bar(position = position_dodge()) + 
+  facet_wrap(.~variable, scales = "free")
+  
+```
+```{r Readmision vs continuas dense}
+diabetic_data4 %>%
+  group_by(readmitted) %>%
+  select(num_lab_procedures,num_medications)%>%
+  gather("variable", "valor", -readmitted) %>%
+  ggplot(aes(x = valor,fill = readmitted))+
+  geom_density(alpha =0.6) + 
+  facet_wrap(.~variable, scales = "free")
+```
+```{r Readmision vs continuas box}
+diabetic_data4 %>%
+  group_by(readmitted) %>%
+  select(num_lab_procedures,num_medications)%>%
+  gather("variable", "valor", -readmitted) %>%
+  ggplot(aes(x = readmitted,y = valor,fill = readmitted))+
+  geom_boxplot(alpha =0.6) + 
+  facet_wrap(.~variable, scales = "free")
+```
+
+```{r Readmision vs categoricas}
+vars <- diabetic_data4 %>%
+  select_if(is.factor) %>%
+  select(-encounter_id,-patient_nbr,-readmitted)%>%
+  colnames()
+for(var in vars){
+diabetic_data4%>%
+  mutate_at(vars(contains(var)), fct_explicit_na) %>%
+  .[,c("readmitted",var)]%>%
+  table() %>%
+  plot(shade = T,las = 2)}
+
+  
+```
+
+## Modelamiento 
+
+Para el entrenamiento y evaluación del modelo de clasificación se dividirán los datos en muestras de training, testing y validación. Debido a que varios registros pueden pertenecer a un mismo paciente la asignación se realiza teniendo en cuenta que todas las visitas de un mismo paciente queden en el mismo grupo para evitar sesgos en el modelo.
+
+Se analizaron modelos de gradient boosting, bosques aleatorios, redes neuronales y modelos lineales generalizados incialmente sin realizar balanceo en los datos ni ajustes adicionales en los parámetros para explorar el desempeño de estos. Se observa que el mejor desempeño se tiene para el modelo gbm, sin embargo la sensibilidad en las readmisiones en menos de 30 días es particularmente baja probablemente debido al desbalance de las clases. Por esta razón se decide dividir el modelo en 2 etapas: 1) identificar las readmisiones en menos de 30 días y 2) identificar las readmisiones en más 30 días logrando un mejor desempeño en estas 2 categorías de interés.
+
+
+Analizando las variables más relevantes para ambos modelos están el número de consultas internas en el año anterior, la especialidad médica y el tipo de alta observando que la mayoría de pacientes no readmitidos no habían tenido consultas internas en el año anterior, que los pacientes readmitidos en menos de 30 días no suelen ser dados de alta directamente al hogar (menor proporción de categoría 1) y que especialidades como la medicina interna o la cardiología suelen tener menores tasa de readmisión mientras que la nefrología, las consultas por emergencia o trauma y los casos en que no se reporta especialidad (Missing) suelen ser readmitidos con mayor frecuencia.
+
+
+```{r Muestras}
+set.seed(1)
+pacientes <- diabetic_data4 %>% .$patient_nbr %>% unique()
+muestra <- sample(1:3,size = length(pacientes), prob = c(0.7,0.2,0.1),
+                  replace = T)
+asignacion <- data.frame(muestra,pacientes)
+training_ids <- asignacion %>% filter(muestra == 1) %>% .$pacientes
+validation_ids <- asignacion %>% filter(muestra == 2) %>% .$pacientes
+testing_ids <- asignacion %>% filter(muestra == 3) %>% .$pacientes
+```
+
+```{r Division}
+training_set <- diabetic_data4 %>%
+  filter(patient_nbr %in% training_ids) %>%
+  select(-encounter_id,-patient_nbr,
+         -`glimepiride-pioglitazone`,
+         -`glyburide-metformin`,
+         -`glipizide-metformin`,
+         -`metformin-rosiglitazone`,
+         -`metformin-pioglitazone`,
+         -citoglipton,
+         -acetohexamide,
+         -tolazamide,
+         -troglitazone,
+         -acarbose,
+         -tolbutamide,
+         -glyburide,
+         -chlorpropamide,
+         -miglitol,
+         -acetohexamide,
+         -examide,
+         -nateglinide,
+         -weight,
+         -repaglinide)
+
+validation_set <- diabetic_data4 %>%
+  filter(patient_nbr %in% validation_ids) %>%
+  select(-encounter_id,-patient_nbr,
+         -`glimepiride-pioglitazone`,
+         -`glyburide-metformin`,
+         -`glipizide-metformin`,
+         -`metformin-rosiglitazone`,
+         -`metformin-pioglitazone`,
+         -citoglipton,
+         -acetohexamide,
+         -tolazamide,
+         -troglitazone,
+         -acarbose,
+         -tolbutamide,
+         -glyburide,
+         -chlorpropamide,
+         -miglitol,
+         -acetohexamide,
+         -examide,
+         -nateglinide,
+         -weight,
+         -repaglinide)
+
+testing_set <- diabetic_data4 %>%
+  filter(patient_nbr %in% testing_ids) %>%
+  select(-encounter_id,-patient_nbr,
+         -`glimepiride-pioglitazone`,
+         -`glyburide-metformin`,
+         -`glipizide-metformin`,
+         -`metformin-rosiglitazone`,
+         -`metformin-pioglitazone`,
+         -citoglipton,
+         -acetohexamide,
+         -tolazamide,
+         -troglitazone,
+         -acarbose,
+         -tolbutamide,
+         -glyburide,
+         -chlorpropamide,
+         -miglitol,
+         -acetohexamide,
+         -examide,
+         -nateglinide,
+         -weight,
+         -repaglinide)
+
+```
+
+```{r conf h2o}
+h2o.init(  nthreads=-1, max_mem_size = "8G")  
+training_h2o <- as.h2o(training_set)
+validation_h2o <- as.h2o(validation_set)
+testing_h2o <- as.h2o(testing_set)
+```
+
+```{r modelos}
+
+var_respuesta <-"readmitted"
+predictores   <- setdiff(h2o.colnames(training_h2o), var_respuesta)
+
+
+model.gbm <- h2o.gbm(y = var_respuesta,
+                     x = predictores,
+                     training_frame = training_h2o,
+                     validation_frame = validation_h2o)
+
+model.glm <- h2o.glm(y = var_respuesta,
+            x = predictores,
+            training_frame = training_h2o,
+            validation_frame = validation_h2o)
+
+model.deep <- h2o.deeplearning(y = var_respuesta,
+                 x = predictores,
+                 training_frame = training_h2o,
+                 validation_frame = validation_h2o)
+
+model.rf <- h2o.randomForest(y = var_respuesta,
+                             x = predictores,
+                             training_frame = training_h2o,
+                             validation_frame = validation_h2o)
+
+```
+
+```{r metricas}
+h2o.confusionMatrix(model.gbm, valid = T)
+h2o.confusionMatrix(model.glm, valid = T)
+h2o.confusionMatrix(model.deep, valid = T)
+h2o.confusionMatrix(model.rf, valid = T)
+```
+
+```{r balanceado}
+training_h2o$menor_30 <- as.factor(training_h2o$readmitted == '<30')
+validation_h2o$menor_30 <-as.factor(validation_h2o$readmitted == '<30')
+
+model_menor.gbm <- h2o.gbm(y = "menor_30",
+                     x = predictores,
+                     training_frame = training_h2o,
+                     validation_frame = validation_h2o)
+
+model_menor.glm <- h2o.glm(y = "menor_30",
+            x = predictores,
+            training_frame = training_h2o,
+            validation_frame = validation_h2o)
+
+model_menor.deep <- h2o.deeplearning(y = "menor_30",
+                 x = predictores,
+                 training_frame = training_h2o,
+                 validation_frame = validation_h2o)
+
+model_menor.rf <- h2o.randomForest(y = "menor_30",
+                             x = predictores,
+                             training_frame = training_h2o,
+                             validation_frame = validation_h2o)
+```
+
+```{r metricas balanceado}
+h2o.confusionMatrix(model_menor.gbm, valid = T)
+h2o.confusionMatrix(model_menor.glm, valid = T)
+h2o.confusionMatrix(model_menor.deep, valid = T)
+h2o.confusionMatrix(model_menor.rf, valid = T)
+```
+
+```{r}
+prediccion_val_menor <- as.data.frame(h2o.predict(model_menor.gbm,validation_h2o))
+```
+
+```{r}
+training_h2o$mayor_30 <- as.factor(training_h2o$readmitted == '>30')
+validation_h2o$mayor_30 <-as.factor(validation_h2o$readmitted == '>30')
+
+model_mayor.gbm <- h2o.gbm(y = "mayor_30",
+                     x = predictores,
+                     training_frame = training_h2o,
+                     validation_frame = validation_h2o)
+
+model_mayor.glm <- h2o.glm(y = "mayor_30",
+            x = predictores,
+            training_frame = training_h2o,
+            validation_frame = validation_h2o)
+
+model_mayor.deep <- h2o.deeplearning(y = "mayor_30",
+                 x = predictores,
+                 training_frame = training_h2o,
+                 validation_frame = validation_h2o)
+
+model_mayor.rf <- h2o.randomForest(y = "mayor_30",
+                             x = predictores,
+                             training_frame = training_h2o,
+                             validation_frame = validation_h2o)
+```
+
+```{r}
+h2o.confusionMatrix(model_mayor.gbm, valid = T)
+h2o.confusionMatrix(model_mayor.glm, valid = T)
+h2o.confusionMatrix(model_mayor.deep, valid = T)
+h2o.confusionMatrix(model_mayor.rf, valid = T)
+```
+
+```{r}
+prediccion_val_mayor <- as.data.frame(h2o.predict(model_mayor.gbm,validation_h2o))
+```
+```{r}
+validation_set$prediction = case_when(prediccion_val_menor$predict == 1 ~ '<30',
+        prediccion_val_mayor$predict == 1 ~ '>30',
+        TRUE ~ 'NO')
+```
+
+
+```{r}
+conf_val  = table(validation_set$readmitted,
+      validation_set$prediction)
+conf_val
+```
+```{r}
+prop.table(conf_val,1)
+```
+
+
+```{r}
+h2o.varimp_plot(model_menor.gbm)
+```
+
+```{r}
+h2o.varimp_plot(model_mayor.gbm)
+```
+
+
+
+## Evaluación del modelo
+
+Se evaluó la combinación de modelos GBM en los datos de testing obteniendo una sensibilidad del 54% para las readmisiones en menos de 30 días y del 48% para las readmisiones en 30 días o más cumpliendo con la meta trazada.Algunos puntos de mejora de los modelos son, tal vez, la reducción de las categorías en la especialidad médica y el tipo de alta agrupando categorías similares desde el conocimiento del campo para evitar sesgos y reducir variabilidad, por otra parte una búsqueda más exhaustiva de parámetros puede también mejorar el desempeño de ambos modelos.
+
+
+```{r}
+prediccion_test_menor <- as.data.frame(h2o.predict(model_menor.gbm,testing_h2o))
+
+prediccion_test_mayor <- as.data.frame(h2o.predict(model_mayor.gbm,testing_h2o))
+
+```
+
+```{r}
+testing_set$prediction = case_when(
+  prediccion_test_menor$predict == 1 ~ '<30',
+  prediccion_test_mayor$predict == 1 ~ '>30',
+  TRUE ~ 'NO')
+```
+
+```{r}
+conf_test  = table(testing_set$readmitted,
+      testing_set$prediction)
+conf_test
+```
+```{r}
+prop.table(conf_test,1)
+```
+
+
+## Referencias
+
+
+
